@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desafío Django</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <h3 class="my-4">EXPLORADOR DE DATOS INTERACTIVO</h3>
+    <button class="btn btn-warning my-4" id="clearTable">Limpiar Tabla</button>
+    <!-- Sección de Grilla de Selección de Campos -->
+    <div class="row">
+        <div class="col-md-3">
+            <h4 class="my-4">Tabla base de datos</h4>
+            <ul class="list-group" id="fields">
+                <h5>Empresa</h5>
+                <li class="list-group-item" draggable="true" data-field="empresa">Empresa</li>
+                <li class="list-group-item" draggable="true" data-field="rubro">Rubro</li>
+                <h5>Trabajador</h5>
+                <li class="list-group-item" draggable="true" data-field="nombre">Trabajador</li>
+                <li class="list-group-item" draggable="true" data-field="cargo">Cargo</li>
+                <li class="list-group-item" draggable="true" data-field="documento">Rut</li>
+                <h5>Documento</h5>
+                <li class="list-group-item" draggable="true" data-field="tipo">Tipo</li>
+                <li class="list-group-item" draggable="true" data-field="Fecha">Fecha</li>
+            </ul>
+        </div>
+
+        <!-- Sección para mostrar la tabla -->
+        <div class="col-md-9">
+            <h4 class="my-4">Grilla de Datos</h4>
+            <table class="table table-striped" id="data-grid">
+                <thead>
+                    <tr>
+                        <!-- Encabezados vacíos que se completarán por cada campo arrastrado -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Las filas se agregarán dinámicamente aquí -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="container">
+           
+        <div class="col-md-4">
+            <h3 class="my-4">Trabajadores</h3>   
+            <form method="GET" action="{% url 'filtros' %}">
+                <h5 for="cargo">Cargo:</h5>
+                <select name="cargo" id="cargo">
+                    <option value="">Todos</option>
+                    {% for cargo in cargos %}
+                    <option value="{{ cargo }}">{{ cargo }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary "> Filtro </button> 
+                <a href="{% url 'explorer' %}" class="btn btn-secondary w-20">Regresar</a>
+                </div>       
+            </form>
+        </div>
+        <!--- ========  Tabla de muestra de informacion  ========-->
+        <div class="col-md-9">   
+            <table table class="table table-striped" id="data-grid">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Cargo</th>
+                        <th>Empresa</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trabajador in trabajadores %}
+                        <tr>
+                            <td>{{ trabajador.nombre }}</td>
+                            <td>{{ trabajador.cargo }}</td>
+                        <td>{{ trabajador.empresa.nombre }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>   
+        </div>
+    </div>
+    
+
+</div>
+
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Datos serializados pasados desde Django
+        const empresas = JSON.parse('{{ empresas_json|escapejs }}');
+        const trabajadores = JSON.parse('{{ trabajadores_json|escapejs }}');
+        const documentos = JSON.parse('{{ documentos_json|escapejs }}');
+
+        // Variables
+        const dataGrid = document.getElementById('data-grid').getElementsByTagName('tbody')[0];
+        const fieldsContainer = document.getElementById('fields');
+        const clearButton = document.getElementById('clearTable');
+        const applyFilterButton = document.getElementById('applyFilter');
+        const filterCargo = document.getElementById('filterCargo');
+        const filterEmpresa = document.getElementById('filterEmpresa');
+        let selectedFields = []; // Campos seleccionados
+
+        let trabajadoresFiltrados = trabajadores; // Usamos los trabajadores filtrados
+
+        // Función para agrupar trabajadores por empresa
+        function agruparPorEmpresa(trabajadores) {
+            return trabajadores.reduce((acc, trabajador) => {
+                const empresaId = trabajador.fields.empresa; // Usar 'fields' para acceder a los datos serializados
+                if (!acc[empresaId]) {
+                    acc[empresaId] = {
+                        empresa: empresas.find(empresa => empresa.pk == empresaId), // 'pk' es el ID del objeto serializado
+                        trabajadores: []
+                    };
+                }
+                acc[empresaId].trabajadores.push(trabajador);
+                return acc;
+            }, {});
+        }
+
+        // Función para actualizar la grilla con los campos seleccionados
+        function updateGrid() {
+            // Limpiar la tabla
+            const headerRow = document.querySelector('#data-grid thead tr');
+            headerRow.innerHTML = '';  // Limpiar encabezados
+
+            // Añadir nuevos encabezados según los campos seleccionados
+            selectedFields.forEach(field => {
+                const th = document.createElement('th');
+                th.textContent = field.charAt(0).toUpperCase() + field.slice(1);
+                headerRow.appendChild(th);
+            });
+
+            // Limpiar el cuerpo de la tabla
+            dataGrid.innerHTML = '';
+
+            // Agrupar los trabajadores por empresa
+            const empresasConTrabajadores = agruparPorEmpresa(trabajadoresFiltrados);
+
+            // Iterar sobre las empresas y sus trabajadores
+            for (const empresaId in empresasConTrabajadores) {
+                const empresaData = empresasConTrabajadores[empresaId];
+                const empresa = empresaData.empresa.fields; // Acceder a los campos de la empresa
+                const trabajadoresDeLaEmpresa = empresaData.trabajadores;
+            
+                // Crear fila para la empresa
+                
+               
+               
+
+                // Crear filas para los trabajadores de esa empresa
+                trabajadoresDeLaEmpresa.forEach(trabajador => {
+                    const row = dataGrid.insertRow();
+
+                    selectedFields.forEach(field => {
+                        const cell = row.insertCell();
+                        if (field === 'empresa') {
+                            cell.textContent = empresa.nombre;
+                        } else if (field === 'rubro') {
+                            cell.textContent = empresa.rubro;
+                        } else if (field === 'nombre') {
+                            cell.textContent = trabajador.fields.nombre;
+                        } else if (field === 'cargo') {
+                            cell.textContent = trabajador.fields.cargo;
+                        } else if (field === 'documento') {
+                            const documento = documentos.find(doc => doc.pk == trabajador.fields.documento);
+                            cell.textContent = documento ? documento.fields.documento : 'No disponible';
+                        } else if (field === 'tipo') {
+                            const documento = documentos.find(doc => doc.pk == trabajador.fields.tipo);
+                            cell.textContent = documento ? documento.fields.tipo : 'No disponible';
+                        } else if (field === 'Fecha') {
+                            const documento = documentos.find(doc => doc.pk == trabajador.fields.fecha);
+                            cell.textContent = documento ? documento.fields.Fecha : 'No disponible';
+                        }
+                    });
+                });
+            }
+        }
+
+        // Función para manejar el drag-and-drop
+        fieldsContainer.addEventListener('dragstart', (e) => {
+            if (e.target.tagName === 'LI') {
+                const field = e.target.dataset.field;
+
+                // Si el campo no está ya seleccionado, agregarlo a la lista
+                if (!selectedFields.includes(field)) {
+                    selectedFields.push(field);
+                    updateGrid();
+                }
+            }
+        });
+
+        // Función para limpiar la tabla
+        clearButton.addEventListener('click', () => {
+            selectedFields = [];  // Vaciar campos seleccionados
+            updateGrid();  // Actualizar la grilla (vacía)
+        });
+
+        // Función para aplicar el filtro
+        applyFilterButton.addEventListener('click', () => {
+            const selectedCargo = filterCargo.value;
+            const selectedEmpresa = filterEmpresa.value;
+
+            // Filtrar los trabajadores
+            trabajadoresFiltrados = trabajadores.filter(trabajador => {
+                const matchesCargo = selectedCargo ? trabajador.fields.cargo === selectedCargo : true;
+                const matchesEmpresa = selectedEmpresa ? trabajador.fields.empresa === parseInt(selectedEmpresa) : true;
+                return matchesCargo && matchesEmpresa;
+            });
+
+            updateGrid();  // Actualiza la grilla con los trabajadores filtrados
+        });
+
+        updateGrid();  // Inicializa la tabla
+    });
+</script>
+
+
+</body>
+</html>
